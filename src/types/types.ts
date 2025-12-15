@@ -12,5 +12,5 @@ export interface Murmur {
   userId: string;
   userName: string;
   likeCount: number;
-  createdAt: number; // Timestamp
+  createdAt: number;
 }

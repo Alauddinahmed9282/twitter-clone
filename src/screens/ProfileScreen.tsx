@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Button, FlatList, StyleSheet, Alert } from "react-native";
 import { auth } from "../config/firebaseConfig";
-import { getUserProfile, followUser, deleteMurmur } from "../services/api";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-import { db } from "../config/firebaseConfig";
+import {
+  getUserProfile,
+  followUser,
+  deleteMurmur,
+  getUserMurmurs,
+} from "../services/api";
 import { Murmur, User } from "../types/types";
 
 export default function ProfileScreen({ route, navigation }: any) {
-  // Params থেকে userId নিবো, না থাকলে current user
   const targetUserId = route.params?.userId || auth.currentUser?.uid;
   const isOwnProfile = targetUserId === auth.currentUser?.uid;
 
@@ -19,20 +21,18 @@ export default function ProfileScreen({ route, navigation }: any) {
   }, [targetUserId]);
 
   const loadProfile = async () => {
-    if (!targetUserId) return;
+    console.log("Loading profile for userId:", targetUserId);
 
-    // 1. Get User Info
+    // if (!targetUserId) return;
+
     const userData = await getUserProfile(targetUserId);
+    console.log("Fetched user data:");
+
     setUser(userData);
 
-    // 2. Get User's Murmurs
-    const q = query(
-      collection(db, "murmurs"),
-      where("userId", "==", targetUserId),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(q);
-    setMurmurs(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Murmur));
+    const userMurmurs = await getUserMurmurs(targetUserId);
+
+    setMurmurs(userMurmurs);
   };
 
   const handleDelete = async (id: string) => {
@@ -47,35 +47,43 @@ export default function ProfileScreen({ route, navigation }: any) {
 
   const handleFollow = async () => {
     await followUser(targetUserId);
-    loadProfile(); // Refresh counts
+    loadProfile();
+    Alert.alert("Success", "You are now following this user.");
   };
 
-  if (!user) return <Text>Loading Profile...</Text>;
+  if (!user)
+    return (
+      <Text style={{ padding: 20 }}>Loading Profile or User Not Found...</Text>
+    );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.name}>{user.name}</Text>
-        <Text>
-          Followers: {user.followersCount} | Following: {user.followingCount}
+        <Text style={styles.stats}>
+          Followers: {user.followersCount || 0} | Following:{" "}
+          {user.followingCount || 0}
         </Text>
         {!isOwnProfile && <Button title="Follow" onPress={handleFollow} />}
       </View>
 
+      <Text style={styles.sectionTitle}>Murmurs</Text>
       <FlatList
         data={murmurs}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.murmurItem}>
-            <Text>{item.text}</Text>
-            <Text style={styles.likes}>Likes: {item.likeCount}</Text>
-            {isOwnProfile && (
-              <Button
-                title="Delete"
-                color="red"
-                onPress={() => handleDelete(item.id)}
-              />
-            )}
+            <Text style={styles.murmurText}>{item.text}</Text>
+            <View style={styles.row}>
+              <Text style={styles.likes}>❤️ {item.likeCount}</Text>
+              {isOwnProfile && (
+                <Button
+                  title="Delete"
+                  color="red"
+                  onPress={() => handleDelete(item.id)}
+                />
+              )}
+            </View>
           </View>
         )}
       />
@@ -84,14 +92,28 @@ export default function ProfileScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { marginBottom: 20, alignItems: "center" },
+  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
+  header: {
+    marginBottom: 20,
+    alignItems: "center",
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
   name: { fontSize: 24, fontWeight: "bold" },
+  stats: { marginVertical: 10, color: "gray" },
+  sectionTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 10 },
   murmurItem: {
     padding: 15,
-    backgroundColor: "white",
+    backgroundColor: "#f9f9f9",
     marginVertical: 5,
     borderRadius: 8,
   },
-  likes: { color: "gray", marginTop: 5 },
+  murmurText: { fontSize: 16, marginBottom: 5 },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  likes: { color: "gray" },
 });

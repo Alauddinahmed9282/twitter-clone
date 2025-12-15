@@ -5,26 +5,32 @@ import {
   ActivityIndicator,
   Button,
   StyleSheet,
+  TextInput,
+  Alert,
 } from "react-native";
-import { getMurmurs } from "../services/api";
+import { getMurmurs, createMurmur } from "../services/api";
 import { Murmur } from "../types/types";
-import MurmurCard from "../components/MurmurCard"; // Assume simple card component
+import MurmurCard from "../components/MurmurCard";
+import { auth } from "../config/firebaseConfig";
 
 export default function HomeScreen({ navigation }: any) {
   const [murmurs, setMurmurs] = useState<Murmur[]>([]);
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [newText, setNewText] = useState("");
 
   const fetchMurmurs = async (loadMore = false) => {
     if (loading) return;
     setLoading(true);
-    try {
-      const res = await getMurmurs(loadMore ? lastDoc : null);
-      setMurmurs((prev) => (loadMore ? [...prev, ...res.data] : res.data));
-      setLastDoc(res.lastVisible);
-    } catch (e) {
-      console.error(e);
+    const res = await getMurmurs(loadMore ? lastDoc : null);
+
+    if (loadMore) {
+      setMurmurs((prev) => [...prev, ...res.data]);
+    } else {
+      setMurmurs(res.data);
     }
+
+    setLastDoc(res.lastVisible);
     setLoading(false);
   };
 
@@ -32,17 +38,47 @@ export default function HomeScreen({ navigation }: any) {
     fetchMurmurs();
   }, []);
 
+  const handlePost = async () => {
+    if (!newText.trim()) return;
+    try {
+      await createMurmur(newText);
+      setNewText("");
+      fetchMurmurs(); // রিফ্রেশ লিস্ট
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+    }
+  };
+
+  const handleLogout = () => {
+    auth.signOut();
+  };
+
   return (
     <View style={styles.container}>
-      <Button
-        title="Post New Murmur"
-        onPress={() => navigation.navigate("PostMurmur")}
-      />
+      <View style={styles.header}>
+        <Button title="Logout" onPress={handleLogout} color="red" />
+        <Button
+          title="My Profile"
+          onPress={() =>
+            navigation.navigate("Profile", { userId: auth.currentUser?.uid })
+          }
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="What's happening?"
+          value={newText}
+          onChangeText={setNewText}
+        />
+        <Button title="Post" onPress={handlePost} />
+      </View>
+
       <FlatList
         data={murmurs}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          // Pass navigation to go to user details
           <MurmurCard
             item={item}
             onPressUser={() =>
@@ -55,6 +91,8 @@ export default function HomeScreen({ navigation }: any) {
         }}
         onEndReachedThreshold={0.5}
         ListFooterComponent={loading ? <ActivityIndicator /> : null}
+        refreshing={loading}
+        onRefresh={() => fetchMurmurs(false)}
       />
     </View>
   );
@@ -62,4 +100,17 @@ export default function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, backgroundColor: "#f5f5f5" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  inputContainer: { flexDirection: "row", marginBottom: 15 },
+  input: {
+    flex: 1,
+    backgroundColor: "white",
+    padding: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
 });
